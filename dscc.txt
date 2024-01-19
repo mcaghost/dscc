@@ -1,0 +1,909 @@
+Pract 1
+1. Develop a JAVA program for multi-client chat server.
+
+/*Server.java*/
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
+public class Server {
+	private ServerSocket serverSocket;
+	public Server(ServerSocket srverSocket) {
+		this.serverSocket = srverSocket;
+	}
+	public void startServer() {
+		try {
+			while(!serverSocket.isClosed()) {
+				Socket socket = serverSocket.accept();
+				System.out.println("A client has connected!");
+				ClientHandler clientHandler = new ClientHandler(socket);
+				Thread thread =new Thread(clientHandler);
+				thread.start();
+			}
+		}
+		catch(IOException e) {
+			System.out.println(e);
+		}
+	}
+	public void closeServerSocket(){
+		try {
+			if(serverSocket != null) {
+				serverSocket.close();
+			}
+		}
+		catch(IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public static void main(String[] args) throws IOException {
+		// TODO Auto-generated method stub
+		ServerSocket serverSocket = new ServerSocket(8868);
+		Server server = new Server(serverSocket);
+		server.startServer();
+	}
+
+}
+
+/*ClientHandler.java*/
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
+import java.util.ArrayList;
+public class ClientHandler implements Runnable {
+	public static ArrayList<ClientHandler> clientHandlers = new ArrayList<>();
+	private Socket socket;
+	private BufferedReader bufferReader;
+	private BufferedWriter bufferWriter;
+	private String clientUsername;
+	private String messageToSend;
+	
+	public ClientHandler(Socket socket) {
+		try {
+			this.socket=socket;
+			this.bufferWriter=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+			this.bufferReader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			this.clientUsername = bufferReader.readLine();
+			clientHandlers.add(this);
+			broadcastMessage("SERVER: "+clientUsername+"has entered the chat!");
+		}
+		catch(IOException e) {
+			closeEverything(socket,bufferReader,bufferWriter);
+		}
+	}
+	@Override
+	public void run() {
+		// TODO Auto-generated method stub
+		String messageFromClient;
+		while(socket.isConnected()) {
+			try {
+				messageFromClient = bufferReader.readLine();
+				broadcastMessage(messageFromClient);
+			}
+			catch(IOException e) {
+				closeEverything(socket,bufferReader,bufferWriter);
+				break;
+			}
+		}
+	}
+	public void broadcastMessage(String messageToSend) {
+		for(ClientHandler clientHandler:clientHandlers) {
+			try {
+				if(!clientHandler.clientUsername.equals(clientUsername)) {
+					clientHandler.bufferWriter.write(messageToSend);
+					clientHandler.bufferWriter.newLine();
+					clientHandler.bufferWriter.flush();
+				}
+			}
+			catch(IOException e) {
+				closeEverything(socket,bufferReader,bufferWriter);
+			}
+		}
+	}
+	public void removeClientHandler() {
+		clientHandlers.remove(this);
+		broadcastMessage("SERVER: "+clientUsername+"has left the chat!");
+	}
+	public void closeEverything(Socket socket, BufferedReader bufferReader,BufferedWriter bufferWriter) {
+		removeClientHandler();
+		try {
+			if(bufferReader != null) {
+				bufferReader.close();
+			}
+			if(bufferWriter != null) {
+				bufferWriter.close();
+			}
+			if(socket != null) {
+				socket.close();
+			}
+		}
+		catch(IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+}
+
+
+/*Client.java*/
+import java.io.IOException;
+import java.io.*;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.Scanner;
+
+public class Client {
+	private Socket socket;
+	private BufferedReader bufferedReader;
+	private BufferedWriter bufferedWriter;
+	private String username;
+	
+	public Client(Socket socket, String username) {
+		try {
+			this.socket=socket;
+			this.bufferedWriter=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+			this.bufferedReader=new BufferedReader(new InputStreamReader (socket.getInputStream()));
+			this.username=username;
+		}
+		catch(IOException e) {
+			closeEverything(socket, bufferedReader, bufferedWriter);
+			
+		}
+	}
+	public void sendMessage() {
+		try {
+			bufferedWriter.write(username);
+			bufferedWriter.newLine();
+			bufferedWriter.flush();
+			Scanner sc = new Scanner(System.in);
+			while(socket.isConnected()) {
+				String messageToSend = sc.nextLine();
+				bufferedWriter.write(username+ ": "+messageToSend);
+				bufferedWriter.newLine();
+				bufferedWriter.flush();
+			}
+		}
+		catch(IOException e) {
+			closeEverything(socket, bufferedReader, bufferedWriter);
+		}
+	}
+	public void listenForMessage() {
+		new Thread(new Runnable() {
+			public void run() {
+				String msgFromGroupChat;
+				while(socket.isConnected()) {
+					try {
+						msgFromGroupChat = bufferedReader.readLine();
+						System.out.println(msgFromGroupChat);
+					}
+					catch(IOException e){
+						
+					}
+				}
+			}
+		}).start();
+	}
+	public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter) {
+		try {
+			if(bufferedReader != null) {
+				bufferedReader.close();
+			}
+			if(bufferedWriter != null) {
+				bufferedWriter.close();
+			}
+			if(socket != null) {
+				socket.close();
+			}
+		}
+		catch(IOException e) {
+			e.printStackTrace();
+		}
+	}
+	public static void main(String[] args) throws UnknownHostException, IOException {
+		// TODO Auto-generated method stub
+		Scanner sc = new Scanner(System.in);
+		System.out.println("Enter your username for the group chat: ");
+		String username=sc.nextLine();
+		Socket socket = new Socket("localhost",8868);
+		Client client = new Client(socket, username);
+		client.listenForMessage();
+		client.sendMessage();
+	}
+}
+2. Token Ring
+
+/*Client.java*/
+import java.io.*;
+	import java.net.*;
+public class Client {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			Socket s=new Socket("localhost",8000);
+			
+			DataOutputStream dout = new DataOutputStream(s.getOutputStream());
+			
+			DataInputStream dis = new DataInputStream(s.getInputStream());
+			
+			DataInputStream in = new DataInputStream(System.in);
+			
+			System.out.println("Enter the message for the Server.....");
+		
+			String str = in.readLine();
+			
+			dout.writeUTF(str);
+			String str1 = dis.readUTF();
+			System.out.println("Message = "+str1);
+			
+			dout.flush();
+			dout.close();
+			dis.close();
+			
+			s.close();
+		}
+		catch(Exception e) {
+			System.out.println(e);
+		}
+
+	}
+
+}
+
+/*Server.java*/
+import java.io.*;
+	import java.net.*;
+public class Sever {
+	
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			ServerSocket ss = new ServerSocket(8000);
+			
+			Socket s=ss.accept();
+			
+			DataInputStream in = new DataInputStream(System.in);
+			
+			DataInputStream dis = new DataInputStream(s.getInputStream());
+			
+			DataOutputStream dout = new DataOutputStream(s.getOutputStream());
+			
+			String str = dis.readUTF();
+			
+			System.out.println("Message = "+str);
+			System.out.println("Enter the message for client .....");
+			String str1 = in.readLine();
+			dout.writeUTF(str1);
+			
+			dout.flush();
+			dout.close();
+			
+			s.close();
+		}
+		catch(Exception e) {
+			System.out.println(e);
+		}
+	}
+}
+
+Pract 2
+1. Write a java program to implement a Server calculator using RPC concept. (Make use of
+datagram)
+ans -->
+
+
+/*Calserver.java*/
+package calcSim;
+
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.StringTokenizer;
+public class CalcServer {
+	int port;
+	ServerSocket ss;
+	Socket socket;
+	
+	public CalcServer() {
+		this.port=0;
+	}
+	
+	public CalcServer(int port) {
+		this.port=port;
+	} 
+	
+	public double addition(int n1, int n2) {
+		return n1+n2;
+	}
+	public double sub(int n1, int n2) {
+		return n1-n2;
+	}
+	public double mul(int n1, int n2) {
+		return n1*n2;
+	}
+	public double div(int n1, int n2) {
+		return n1/n2;
+	}
+	
+	public void listen() {
+		try {
+			System.out.println("Server started");
+			ss=new ServerSocket(port);
+			socket = ss.accept();
+			
+
+			DataInputStream dis= new DataInputStream(socket.getInputStream());
+			DataOutputStream dout = new DataOutputStream(socket.getOutputStream());
+
+			double result = 0.0;
+			
+			while(true) {
+				String str = dis.readUTF();
+				StringTokenizer st = new StringTokenizer(str,"-");
+				int choice = Integer.parseInt(st.nextToken());
+				int num1 = Integer.parseInt(st.nextToken());
+				int num2 = Integer.parseInt(st.nextToken());
+				CalcServer cs = new CalcServer();
+				
+				switch(choice) {
+				case 1:result = cs.addition(num1, num2);
+				break;
+				case 2:result = cs.sub(num1, num2);
+				break;
+				case 3:result= cs.mul(num1, num2);
+				break;
+				case 4: result = cs.div(num1, num2);
+				break;
+				}
+				
+				System.out.println("Result for "+str+" is - ");
+				
+				String res = Double.toString(result);
+				System.out.println("Result is : "+res);
+				dout.writeUTF(res);
+				dout.flush();
+				
+				dis.close();
+				dout.close();
+				socket.close();
+			}
+			
+			
+	}
+	catch(Exception e) {
+		System.out.println(e.getMessage());	
+		}
+	}
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		CalcServer cs = new CalcServer(5000);
+		cs.listen();
+	}
+
+}
+
+
+/CalClient.java/
+package calcSim;
+
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.InputStreamReader;
+import java.net.Socket;
+public class CalcClient {
+	Socket socket;
+	int port;
+	public CalcClient(int port) {
+		this.port=port;
+	}
+	public void sntReq() throws Exception{
+		socket = new Socket("localhost",port);
+		DataOutputStream dout = new DataOutputStream(socket.getOutputStream());
+		DataInputStream din= new DataInputStream(socket.getInputStream());
+		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+		String str="";
+		int num1,num2;
+		System.out.println("1.Addition 2.sub 3.Mul 4.Div 5.Exit");
+		System.out.println("Enter your choice");
+		int choice=Integer.parseInt(in.readLine());
+		System.out.println("Val = "+choice);
+		
+		switch(choice)
+		{
+		case 1:
+			str+=choice+"-";
+			System.out.println("Enter 1st number");
+			num1=Integer.parseInt(in.readLine());
+			str += num1+"-";
+			System.out.println("Enter 2nd number");
+			num2=Integer.parseInt(in.readLine());
+			str +=num2;
+			break;
+		case 2:
+			str+=choice+"-";
+			System.out.println("Enter 1st number");
+			num1=Integer.parseInt(in.readLine());
+			str += num1+"-";
+			System.out.println("Enter 2nd number");
+			num2=Integer.parseInt(in.readLine());
+			str +=num2;
+			break;
+		case 3:
+			str+=choice+"-";
+			System.out.println("Enter 1st number");
+			num1=Integer.parseInt(in.readLine());
+			str += num1+"-";
+			System.out.println("Enter 2nd number");
+			num2=Integer.parseInt(in.readLine());
+			str +=num2;
+			break;
+		case 4:
+			str+=choice+"-";
+			System.out.println("Enter 1st number");
+			num1=Integer.parseInt(in.readLine());
+			str += num1+"-";
+			System.out.println("Enter 2nd number");
+			num2=Integer.parseInt(in.readLine());
+			str +=num2;
+			break;
+		case 5:
+			System.out.println("Program exited");
+			break;
+		default:
+			System.out.println("invalid choice");
+			break;
+		}
+		System.out.println(str);
+		dout.writeUTF(str);
+		dout.flush();
+		
+		String result = din.readUTF();
+		System.out.println("Result is : "+result);
+		
+		din.close();
+		dout.close();
+		socket.close();
+	}
+	
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			CalcClient cc= new CalcClient(5000);
+			cc.sntReq();
+		}
+		catch(Exception e) {
+			System.out.println(e.getMessage());
+		}
+	}
+
+}
+
+
+
+
+
+2. Write a java to implement a Date Time Server using RPC concept. (Make use of datagram)
+
+-->
+/UDPServer/
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketException;
+import java.net.InetAddress;
+import java.util.Date;
+public class UDPSever {
+
+	public static void main(String[] args) throws SocketException{
+		// TODO Auto-generated method stub
+		DatagramPacket dpac;
+		DatagramSocket dsoc = new DatagramSocket();
+		System.out.print("SeverUp");
+		try {
+			while(true) {
+				System.out.print("Sending");
+				System.out.println();
+				Thread.sleep(1000);
+				String time = new Date().toString();
+				byte b[] = time.getBytes();
+				dpac = new DatagramPacket(b,b.length,InetAddress.getByName("localhost"),1314);
+				System.out.println();
+				dsoc.send(dpac);
+			}
+		}
+		catch(IOException | InterruptedException e) {
+			System.out.println(e);
+		}
+		dsoc.close();
+		
+	}
+
+}
+
+
+/UDPClient/
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketException;
+public class UDPClient {
+//UDPCLIENT
+	public static void main(String[] args)throws SocketException {
+		// TODO Auto-generated method stub
+		DatagramPacket dpac;
+		DatagramSocket dsoc = new DatagramSocket (1314);
+		byte[] b = new byte[64];
+		String data ="no data";
+		System.out.print("clientUp");
+		try {
+			while(true) {
+				dpac = new DatagramPacket (b,b.length);
+				dsoc.receive(dpac);
+				data = new String(dpac.getData());
+				System.out.println();
+				System.out.print("we recevied "+data);
+			}
+		}
+		catch(IOException i) {
+			System.out.println("Some exception");
+		}
+		dsoc.close();
+	}
+}
+
+
+Pract 3
+1. Design a Graphical User Interface (GUI) based calculator. (scientific or standard). Operations
+should be performed using both mouse and keyboard.
+
+
+-->
+/* client.java*/
+package rmi_pack;
+
+import java.rmi.Naming;
+
+public class client {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			System.out.println("Client program started!");
+			adder stub = (adder)Naming.lookup("rmi://localhost:5000/CalcOpService");
+			System.out.println("Addition = "+stub.getAddition(34,4));
+			System.out.println("Subtraction = "+stub.getSubtraction(34,4));
+		}
+		catch(Exception e) {
+			System.out.println(e);
+		}
+	}
+
+}
+
+/*server.java*/
+package rmi_pack;
+
+import java.rmi.Naming;
+import java.rmi.registry.LocateRegistry;
+
+public class server {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			System.out.println("Calculate service server Started");
+			adder stub = new CalcOperation();
+			System.out.println("Calculator Server bunding...");
+			LocateRegistry.createRegistry(5000);
+			Naming.rebind("rmi://localhost:5000/CalcOpService", stub);
+			System.out.println("Calculator service is register in registry");
+		}
+		catch(Exception e) {
+			System.out.println(e);
+		}
+	}
+
+}
+
+/*CalcOperation.java*/
+package rmi_pack;
+
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+public class CalcOperation extends UnicastRemoteObject implements adder{
+	
+	private static final long serialVersionUID = 1L;
+	CalcOperation() throws RemoteException{
+		super();
+	}
+	
+	public int getAddition(int num1,int num2) throws RemoteException{
+		return num1+num2;
+	}
+	public int getSubtraction(int num1,int num2) throws RemoteException{
+		return num1-num2;
+	}
+}
+
+/*adder.java*/
+package rmi_pack;
+
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface adder extends Remote{
+	public int getAddition(int num1,int num2) throws RemoteException;
+	public int getSubtraction(int num1,int num2) throws RemoteException;
+}
+
+
+
+2. Retrieve day, time and date function from server to client. This program should display server
+day, date and time.
+
+
+3.Factorial 
+
+Pract 4
+a) Using MySQL create Library database. Create table Book (Book_id, Book_name, Book_author) and
+retrieve the Book information from Library database using Remote Object Communication concept.
+
+
+
+b) Using MySQL create Electric_Bill database. Create table Bill (consumer_name, bill_due_date,
+bill_amount) and retrieve the bill information from the Electric_Bill database using Remote
+Object Communication concept.
+
+C) Student
+
+/*DBServerClient.java*/
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.rmi.Naming;
+
+public class DBServiceClient {
+
+	public DBServiceClient() {
+		// TODO Auto-generated constructor stub
+		super();
+	}
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		String sql="", ch="";
+		try {
+			StudDBInf stub = (StudDBInf)Naming.lookup("rmi://localhost:1900/ROCforStudDB");
+			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+			while(true) {
+				System.out.println("Select an Option");
+				System.out.println("1:Retrieve Student Information");
+				System.out.println("2:Insert Student Informatin");
+				System.out.println("3:Exit");
+				System.out.println("Enter your Choice");
+				ch = br.readLine();
+				
+				if (ch.equals("1")) {
+					sql = "SELECT * FROM student";
+					sql = stub.getData(sql);
+				}
+				else if(ch.equals("2")) {
+					sql = "INSERT INTO student(rollno, studnm) VALUES (10,'ss')";
+					sql = stub.insertData(sql);
+				}
+				else if(ch.equals("3")) {
+					System.exit(0);
+				}
+				else {
+					sql = "Please select valid Option";
+				}
+				System.out.println(sql);
+			}
+		}
+		catch(Exception e)
+		{
+		e.printStackTrace();
+		}
+	}
+}
+
+
+/*DBServerClient.java*/
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.rmi.Naming;
+
+public class DBServiceClient {
+
+	public DBServiceClient() {
+		// TODO Auto-generated constructor stub
+		super();
+	}
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		String sql="", ch="";
+		try {
+			StudDBInf stub = (StudDBInf)Naming.lookup("rmi://localhost:1900/ROCforStudDB");
+			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+			while(true) {
+				System.out.println("Select an Option");
+				System.out.println("1:Retrieve Student Information");
+				System.out.println("2:Insert Student Informatin");
+				System.out.println("3:Exit");
+				System.out.println("Enter your Choice");
+				ch = br.readLine();
+				
+				if (ch.equals("1")) {
+					sql = "SELECT * FROM student";
+					sql = stub.getData(sql);
+				}
+				else if(ch.equals("2")) {
+					sql = "INSERT INTO student(rollno, studnm) VALUES (10,'ss')";
+					sql = stub.insertData(sql);
+				}
+				else if(ch.equals("3")) {
+					System.exit(0);
+				}
+				else {
+					sql = "Please select valid Option";
+				}
+				System.out.println(sql);
+			}
+		}
+		catch(Exception e)
+		{
+		e.printStackTrace();
+		}
+	}
+}
+
+
+/*DBServiceSrv.java*/
+import java.rmi.Naming;
+import java.rmi.registry.LocateRegistry;
+
+public class DBServiceSrv {
+
+	public DBServiceSrv() {
+		// TODO Auto-generated constructor stub
+		super();
+	}
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		try {
+			StudDBInf skeleton = new StudDBOperations();
+			LocateRegistry.createRegistry(1900);
+			Naming.rebind("rmi://localhost:1900/ROCforStudDB", skeleton);
+			System.out.println("Server Registered.");
+		}
+		catch (Exception e1) {
+			e1.printStackTrace();
+		}
+	}
+
+}
+
+
+/*StudDBInf.java*/
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface StudDBInf extends Remote {
+	public String getData(String strQry) throws RemoteException;
+	public String insertData(String strQry) throws RemoteException;
+}
+
+
+/*StudDBOperations.java*/
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.Statement;
+
+public class StudDBOperations extends UnicastRemoteObject implements StudDBInf {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	Connection con;
+	Statement stmt;
+	ResultSet rs;
+	ResultSetMetaData rsmd;
+	String colStr, resultStr;
+	
+	public StudDBOperations() throws RemoteException {
+		// TODO Auto-generated constructor stub
+		super();
+		con = null;
+		stmt = null;
+		rs = null;
+		rsmd = null;
+		colStr = "";
+		resultStr = "";
+	}
+
+	public void setDBCon() {
+		try {
+			String URL="jdbc:mysql://localhost:2424/studinfo";
+			Class.forName("com.mysql.jdbc.Driver");
+			con = DriverManager.getConnection(URL,"root","");
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	@Override
+	public String getData(String strQry) throws RemoteException {
+		// TODO Auto-generated method stub
+		try {
+			setDBCon();
+			System.out.println("Server Registered.");
+			//System.out.println(con.toString());
+			stmt = con.createStatement();
+			rs = stmt.executeQuery(strQry);
+			rsmd = rs.getMetaData();
+			for(int i=1; i<=rsmd.getColumnCount();i++) {
+				colStr = colStr + rsmd.getColumnName(i) + "\t";
+			}
+			
+			while(rs.next()) {
+				for(int i=1; i<=rsmd.getColumnCount(); i++) {
+					resultStr = resultStr + rs.getString(i) + "\t";
+				}
+				resultStr = resultStr + "\n";
+			}
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+		return colStr + "\n\n" +resultStr;
+	}
+	
+	@Override
+	public String insertData(String strQry) throws RemoteException {
+		// TODO Auto-generated method stub
+		try {
+			setDBCon();
+			System.out.println("Server Registered.");
+			//System.out.println(con.toString());
+			stmt = con.createStatement();
+			int recordInserted = stmt.executeUpdate(strQry);
+			if(recordInserted != 0)
+				resultStr = "Record inserted successfully.";
+			else
+				resultStr = "Record not inserted successfully.";
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+		return resultStr;
+	}
+}
+
+Pract 5
+a) Write a java program to implement mutual exclusion using Token ring algorithm.
+
+Pract 6
+1. Write a java program to access the files from your Google drive account and read and write
+the file contents from your program.
+
+
+
+Pract 7
+1. Write a java program using Google App Engine for checking entered number is Odd or
+Even.
+
+2. Write a java program using Google App Engine for checking entered number is Prime or
+not.
